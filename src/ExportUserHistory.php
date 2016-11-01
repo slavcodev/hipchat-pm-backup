@@ -11,6 +11,7 @@ namespace Acme\Hipchat;
 use DomainException;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -89,12 +90,15 @@ final class ExportUserHistory extends Command
      */
     private function exportHistory(string $token, string $user)
     {
+        echo "Working on user $user..." . PHP_EOL;
         $now = date(DATE_ISO8601);
         $limit = 1000;
         $offset = 0;
 
         try {
+            $data = [];
             do {
+                echo "Fetching $offset to " . ($offset + $limit) . ' records...' . PHP_EOL;
                 $response = $this->client->request(
                     'GET',
                     "v2/user/{$user}/history",
@@ -112,15 +116,22 @@ final class ExportUserHistory extends Command
                     ]
                 );
 
-                $data = json_decode((string) $response->getBody(), true);
-                $file = "{$this->dir}/{$now}.{$user}.{$offset}.json";
-
-                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
-
+                $result = json_decode((string) $response->getBody(), true);
+                $data = array_merge(
+                    $data,
+                    $result['items']
+                );
                 $offset += $limit;
 
-                echo "File [{$file}] created\n";
-            } while (isset($data['items']) && $data['items']);
+            } while (isset($result['items']) && $result['items']);
+
+            $file = "{$this->dir}/{$now}.{$user}.json";
+            $file = str_replace(':', '-', $file); // windows compatibility
+
+            if (file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT)) === false) {
+                throw new RuntimeException('Impossible to write the file');
+            }
+            echo "File [{$file}] created\n";
         } catch (ClientException $e) {
             echo $e->getMessage(), PHP_EOL;
         }
