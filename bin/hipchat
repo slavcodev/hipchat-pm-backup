@@ -1,0 +1,14 @@
+#!/usr/bin/env php
+<?php
+
+use Acme\Hipchat\ExportUserHistory;
+use GuzzleHttp\Client;
+use Symfony\Component\Console\Application;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$client = new Client(['base_uri' => 'https://api.hipchat.com']);
+
+$application = new Application('Hipchat PM Backup');
+$application->add(new ExportUserHistory($client, __DIR__ . '/../backup/'));
+$application->run();
