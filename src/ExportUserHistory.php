@@ -90,15 +90,19 @@ final class ExportUserHistory extends Command
      */
     private function exportHistory(string $token, string $user)
     {
-        echo "Working on user $user..." . PHP_EOL;
+        echo "Working on user {$user}...", PHP_EOL;
+
         $now = date(DATE_ISO8601);
         $limit = 1000;
         $offset = 0;
 
         try {
             $data = [];
+            $page = [];
+
             do {
-                echo "Fetching $offset to " . ($offset + $limit) . ' records...' . PHP_EOL;
+                echo "Fetching the {$limit} records from {$offset}...", PHP_EOL;
+
                 $response = $this->client->request(
                     'GET',
                     "v2/user/{$user}/history",
@@ -117,21 +121,23 @@ final class ExportUserHistory extends Command
                 );
 
                 $result = json_decode((string) $response->getBody(), true);
-                $data = array_merge(
-                    $data,
-                    $result['items']
-                );
-                $offset += $limit;
+                
+                if (!empty($result['items'])) {
+                    $page = $result['items'];
+                    $data = array_merge($data, $page);
+                    
+                    $offset += $limit;
+                }
+            } while ($page);
 
-            } while (isset($result['items']) && $result['items']);
+            // Keep windows compatibility
+            $file = str_replace(':', '-', "{$now}.{$user}.json");
 
-            $file = "{$this->dir}/{$now}.{$user}.json";
-            $file = str_replace(':', '-', $file); // windows compatibility
-
-            if (file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT)) === false) {
+            if (file_put_contents("{$this->dir}/{$file}", json_encode($data, JSON_PRETTY_PRINT)) === false) {
                 throw new RuntimeException('Impossible to write the file');
             }
-            echo "File [{$file}] created\n";
+            
+            echo "File [{$file}] created", PHP_EOL;
         } catch (ClientException $e) {
             echo $e->getMessage(), PHP_EOL;
         }
